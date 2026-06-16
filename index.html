@@ -20,38 +20,40 @@
             <div class="welcome-header">
                 <i class="fa-solid fa-shield-halved welcome-logo"></i>
                 <h1>NetSuite Data Validator</h1>
-                <p class="welcome-tagline">Ensure your spreadsheets are import-ready in seconds</p>
-            </div>
-            
-            <div class="formatting-guide">
-                <h2>Formatting Requirements</h2>
-                <div class="guide-grid">
-                    <div class="guide-item">
-                        <i class="fa-solid fa-file-excel guide-icon"></i>
-                        <h3>1. File Type</h3>
-                        <p>Only Excel spreadsheets (<code>.xlsx</code>) are supported.</p>
-                    </div>
-                    <div class="guide-item">
-                        <i class="fa-solid fa-table-columns guide-icon"></i>
-                        <h3>2. Header Row</h3>
-                        <p>The first row must contain column headers. Columns can be in any order.</p>
-                    </div>
-                    <div class="guide-item">
-                        <i class="fa-solid fa-asterisk guide-icon"></i>
-                        <h3>3. Required Columns</h3>
-                        <p>Mandatory fields (e.g. External ID, Subsidiary) must not be empty or blank.</p>
-                    </div>
-                    <div class="guide-item">
-                        <i class="fa-solid fa-list-check guide-icon"></i>
-                        <h3>4. Valid Lists & Types</h3>
-                        <p>Dropdown list values (like Locations or Departments) must match approved NetSuite options.</p>
-                    </div>
-                </div>
+                <p class="welcome-tagline">Validate your spreadsheets locally and securely in your browser before importing to NetSuite.</p>
             </div>
             
             <button id="start-app-btn" class="btn btn-primary start-btn">
-                Proceed to Validator <i class="fa-solid fa-arrow-right"></i>
+                Start Validating <i class="fa-solid fa-arrow-right"></i>
             </button>
+            
+            <details class="guide-accordion">
+                <summary>How should my files be formatted? <i class="fa-solid fa-chevron-down accordion-arrow"></i></summary>
+                <div class="formatting-guide">
+                    <div class="guide-grid">
+                        <div class="guide-item">
+                            <i class="fa-solid fa-file-excel guide-icon"></i>
+                            <h3>1. File Type</h3>
+                            <p>Only Excel spreadsheets (<code>.xlsx</code>) are supported.</p>
+                        </div>
+                        <div class="guide-item">
+                            <i class="fa-solid fa-table-columns guide-icon"></i>
+                            <h3>2. Header Row</h3>
+                            <p>The first row must contain column headers. Columns can be in any order.</p>
+                        </div>
+                        <div class="guide-item">
+                            <i class="fa-solid fa-asterisk guide-icon"></i>
+                            <h3>3. Required Columns</h3>
+                            <p>Mandatory fields (e.g. External ID, Subsidiary) must not be empty or blank.</p>
+                        </div>
+                        <div class="guide-item">
+                            <i class="fa-solid fa-list-check guide-icon"></i>
+                            <h3>4. Valid Lists & Types</h3>
+                            <p>Dropdown list values (like Locations or Departments) must match approved NetSuite options.</p>
+                        </div>
+                    </div>
+                </div>
+            </details>
         </div>
     </div>
 

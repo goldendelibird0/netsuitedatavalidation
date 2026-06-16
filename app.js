@@ -406,6 +406,41 @@ function runValidation(worksheet, schemaRows, validationLists, templateType) {
         }
     }
 
+    // Helper to guess actual template type from headers
+    function guessActualTemplate(headers) {
+        const normHeaders = headers.map(h => normalizeHeader(h));
+        const signatures = {
+            employee: ["employeeid", "hiredate", "jobtitle", "giveaccess"],
+            customer: ["isperson", "salesrep", "leadsource"],
+            vendor: ["individual", "printoncheckas", "defaultexpenseaccount", "defaultpayablesaccount"],
+            inventory: ["itemnamenumber", "cogsaccount", "incomeaccount", "assetaccount"],
+            coa: ["subaccountof", "restricttodepartment", "restricttoclass", "restricttolocation"]
+        };
+        for (const [type, sigs] of Object.entries(signatures)) {
+            if (sigs.some(sig => normHeaders.includes(sig))) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    // Check for potential template mismatch
+    const matchCount = Object.keys(mappedColumns).length;
+    const totalExpected = schemaRows.length;
+    const matchRate = matchCount / totalExpected;
+
+    if (matchCount < 3 || matchRate < 0.25) {
+        const guessedType = guessActualTemplate(excelHeaders);
+        let errorMsg = `Template Mismatch: The uploaded file matches only ${matchCount} of the ${totalExpected} expected columns for ${SPREADSHEETS[templateType].name}.`;
+        if (guessedType && guessedType !== templateType) {
+            errorMsg += ` It looks like this file is actually for the '${SPREADSHEETS[guessedType].name}' template.`;
+        }
+        coreIssues.push({
+            issue: errorMsg,
+            fix: `Please select the correct template in the sidebar or upload a matching spreadsheet.`
+        });
+    }
+
     // 4. Build Rules Config
     const rulesConfig = {};
     const ruleReference = {

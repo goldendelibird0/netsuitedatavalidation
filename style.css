@@ -743,6 +743,67 @@ tr:hover td {
     box-shadow: 0 4px 15px var(--primary-glow);
 }
 
+.guide-accordion {
+    width: 100%;
+    margin-top: 10px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 24px;
+}
+
+.guide-accordion summary {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--primary);
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+    transition: var(--transition-smooth);
+    padding: 10px 20px;
+    border-radius: var(--border-radius-md);
+    background: rgba(78, 128, 247, 0.05);
+    border: 1px solid rgba(78, 128, 247, 0.15);
+    margin: 0 auto;
+}
+
+.guide-accordion summary::-webkit-details-marker {
+    display: none;
+}
+
+.guide-accordion summary:hover {
+    color: white;
+    background: rgba(78, 128, 247, 0.15);
+    border-color: rgba(78, 128, 247, 0.3);
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.accordion-arrow {
+    font-size: 13px;
+    transition: transform 0.3s ease;
+}
+
+.guide-accordion[open] .accordion-arrow {
+    transform: rotate(180deg);
+}
+
+.guide-accordion[open] .formatting-guide {
+    margin-top: 24px;
+    animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .app-container.hidden {
     display: none !important;
 }
