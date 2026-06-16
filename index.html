@@ -63,7 +63,7 @@
         <aside class="sidebar">
             <div class="brand">
                 <i class="fa-solid fa-shield-halved brand-icon"></i>
-                <h2>NS Validator</h2>
+                <h2>NetSuite Validator</h2>
             </div>
             
             <div class="template-selector-section">
@@ -81,8 +81,8 @@
             </div>
 
             <div class="info-card">
-                <h3><i class="fa-solid fa-shield-halved"></i> 100% Secure & Private</h3>
-                <p>Data processing is completed entirely in your browser. Your spreadsheets are never uploaded to any server.</p>
+                <h3><i class="fa-solid fa-lock"></i> Local-Only Processing</h3>
+                <p>Your files are validated entirely in your browser. No data is ever uploaded or sent to a server.</p>
             </div>
             
             <div class="schema-info">
@@ -94,8 +94,14 @@
         <!-- Main Content Area -->
         <main class="main-content">
             <header class="main-header">
-                <h1>NetSuite Data Validation</h1>
-                <p>Ensure your data is perfect before import</p>
+                <div class="header-meta">
+                    <h1>NetSuite Data Validation</h1>
+                    <p>Ensure your data is perfect before import</p>
+                </div>
+                <div class="mode-toggle">
+                    <button id="single-mode-btn" class="toggle-btn active"><i class="fa-solid fa-file-lines"></i> Single File</button>
+                    <button id="batch-mode-btn" class="toggle-btn"><i class="fa-solid fa-cubes"></i> Batch Validate</button>
+                </div>
             </header>
 
             <section class="workspace">
@@ -104,13 +110,13 @@
                     <div id="dropzone" class="dropzone">
                         <input type="file" id="file-input" accept=".xlsx" style="display: none;">
                         <i class="fa-regular fa-file-excel dropzone-icon"></i>
-                        <h3>Drag & drop your Excel file here</h3>
-                        <p>or click to browse from your computer</p>
+                        <h3 id="dropzone-title">Drag & drop your Excel file here</h3>
+                        <p id="dropzone-desc">or click to browse from your computer</p>
                         <span class="file-format-info">Supports .xlsx spreadsheets only</span>
                     </div>
                 </div>
 
-                <!-- Processing & Results Status Card -->
+                <!-- Single File Processing & Results Status Card -->
                 <div id="status-card" class="status-card hidden">
                     <div class="status-header">
                         <div id="status-spinner" class="spinner"></div>
@@ -140,6 +146,43 @@
                         <button id="download-btn" class="btn btn-primary" disabled>
                             <i class="fa-solid fa-file-arrow-down"></i> Download Highlighted Report
                         </button>
+                    </div>
+                </div>
+
+                <!-- Batch Processing Status & Table Container -->
+                <div id="batch-card" class="status-card hidden">
+                    <div class="status-header">
+                        <div id="batch-spinner" class="spinner" style="display: none;"></div>
+                        <i id="batch-status-icon" class="fa-solid fa-cubes status-large-icon" style="display: block; color: var(--primary);"></i>
+                        <div class="status-meta">
+                            <h3 id="batch-status-title">Ready for batch processing</h3>
+                            <p id="batch-status-desc">Select or drop multiple files to start validation.</p>
+                        </div>
+                    </div>
+                    <div class="status-actions">
+                        <button id="batch-download-zip-btn" class="btn btn-primary" disabled>
+                            <i class="fa-solid fa-file-zipper"></i> Download All (ZIP)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Batch Detailed Validation Output -->
+                <div id="batch-results-panel" class="results-panel hidden">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Detected Template</th>
+                                    <th>Rows Checked</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batch-results-body">
+                                <!-- Batch row entries will be dynamically injected here -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -218,9 +261,10 @@
         </main>
     </div>
 
-    <!-- ExcelJS & PapaParse Library CDNs -->
+    <!-- ExcelJS, PapaParse & JSZip Library CDNs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Custom Application Logic -->
     <script src="app.js"></script>
 </body>

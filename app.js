@@ -40,6 +40,74 @@ let currentWorkbook = null;
 let currentReportBlob = null;
 let currentReportName = "";
 
+let currentMode = "single";
+let batchFiles = []; // array of { file, rowId, blob, templateType, status }
+const schemaCache = {}; // templateType -> { schemaRows, validationLists }
+
+// Helper to normalize strings for comparison (removes all non-alphanumeric characters and lowercase)
+function normalizeHeader(str) {
+    if (!str) return "";
+    return String(str).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Helper to guess actual template type from headers
+function guessActualTemplate(headers) {
+    const normHeaders = headers.map(h => normalizeHeader(h));
+    const signatures = {
+        employee: ["employeeid", "hiredate", "jobtitle", "giveaccess"],
+        customer: ["isperson", "salesrep", "leadsource"],
+        vendor: ["individual", "printoncheckas", "defaultexpenseaccount", "defaultpayablesaccount"],
+        inventory: ["itemnamenumber", "cogsaccount", "incomeaccount", "assetaccount"],
+        coa: ["subaccountof", "restricttodepartment", "restricttoclass", "restricttolocation"]
+    };
+    for (const [type, sigs] of Object.entries(signatures)) {
+        if (sigs.some(sig => normHeaders.includes(sig))) {
+            return type;
+        }
+    }
+    return null;
+}
+
+// Caching helper to download and parse Google Sheets schemas
+async function getSchemaAndLists(templateType) {
+    if (schemaCache[templateType]) {
+        return schemaCache[templateType];
+    }
+
+    const spreadsheetConfig = SPREADSHEETS[templateType];
+    const schemaUrl = buildSheetUrl(spreadsheetConfig.id, "schema");
+    const schemaResponse = await fetch(schemaUrl);
+    if (!schemaResponse.ok) throw new Error(`Failed to download schema configuration for ${spreadsheetConfig.name}.`);
+    const schemaCsvText = await schemaResponse.text();
+    
+    const parsedSchema = Papa.parse(schemaCsvText, { header: true, skipEmptyLines: true });
+    const schemaRows = parsedSchema.data.filter(row => cleanValue(row.column_name) !== "");
+
+    // Fetch Validation Lists
+    const validationLists = {};
+    const validationListNames = [...new Set(
+        schemaRows
+            .map(r => cleanValue(r.validation_list))
+            .filter(val => val !== "" && val !== "nan")
+            .map(val => normalizeColumnName(val))
+    )];
+
+    for (const listName of validationListNames) {
+        const listUrl = buildSheetUrl(spreadsheetConfig.id, listName);
+        const listResponse = await fetch(listUrl);
+        if (listResponse.ok) {
+            const listCsvText = await listResponse.text();
+            const parsedList = Papa.parse(listCsvText, { header: false, skipEmptyLines: true });
+            validationLists[listName] = parsedList.data
+                .map(r => cleanValue(r[0]))
+                .filter(val => val !== "");
+        }
+    }
+
+    schemaCache[templateType] = { schemaRows, validationLists };
+    return schemaCache[templateType];
+}
+
 // ==========================================================================
 // SHEET URL HELPER
 // ==========================================================================
@@ -80,6 +148,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const startAppBtn = document.getElementById("start-app-btn");
     const welcomeScreen = document.getElementById("welcome-screen");
     const appContainer = document.getElementById("app-container");
+
+    // Mode Toggle Elements
+    const singleModeBtn = document.getElementById("single-mode-btn");
+    const batchModeBtn = document.getElementById("batch-mode-btn");
+    const dropzoneTitle = document.getElementById("dropzone-title");
+    const dropzoneDesc = document.getElementById("dropzone-desc");
+    const batchDownloadZipBtn = document.getElementById("batch-download-zip-btn");
     
     startAppBtn.addEventListener("click", () => {
         welcomeScreen.classList.add("fade-out");
@@ -94,7 +169,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     templateSelect.addEventListener("change", () => {
         updateSchemaLink();
-        resetStatus();
+        if (currentMode === "single") {
+            resetStatus();
+        } else {
+            resetBatchStatus();
+        }
     });
 
     function updateSchemaLink() {
@@ -102,6 +181,37 @@ document.addEventListener("DOMContentLoaded", () => {
         const sheetId = SPREADSHEETS[selected].id;
         schemaLink.href = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
     }
+
+    // Mode Toggle Actions
+    singleModeBtn.addEventListener("click", () => {
+        currentMode = "single";
+        singleModeBtn.classList.add("active");
+        batchModeBtn.classList.remove("active");
+        fileInput.multiple = false;
+        dropzoneTitle.textContent = "Drag & drop your Excel file here";
+        dropzoneDesc.textContent = "or click to browse from your computer";
+        
+        document.querySelector(".template-selector-section").classList.remove("hidden");
+        document.querySelector(".schema-info").classList.remove("hidden");
+        document.getElementById("batch-card").classList.add("hidden");
+        document.getElementById("batch-results-panel").classList.add("hidden");
+        resetStatus();
+    });
+
+    batchModeBtn.addEventListener("click", () => {
+        currentMode = "batch";
+        batchModeBtn.classList.add("active");
+        singleModeBtn.classList.remove("active");
+        fileInput.multiple = true;
+        dropzoneTitle.textContent = "Drag & drop multiple Excel files here";
+        dropzoneDesc.textContent = "or click to browse to select multiple files";
+
+        document.querySelector(".template-selector-section").classList.add("hidden");
+        document.querySelector(".schema-info").classList.add("hidden");
+        document.getElementById("status-card").classList.add("hidden");
+        document.getElementById("results-panel").classList.add("hidden");
+        resetBatchStatus();
+    });
 
     // Drag and Drop Logic
     dropzone.addEventListener("click", () => fileInput.click());
@@ -119,13 +229,21 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         dropzone.classList.remove("dragover");
         if (e.dataTransfer.files.length > 0) {
-            handleFile(e.dataTransfer.files[0]);
+            if (currentMode === "single") {
+                handleFile(e.dataTransfer.files[0]);
+            } else {
+                handleBatchFiles(e.dataTransfer.files);
+            }
         }
     });
 
     fileInput.addEventListener("change", () => {
         if (fileInput.files.length > 0) {
-            handleFile(fileInput.files[0]);
+            if (currentMode === "single") {
+                handleFile(fileInput.files[0]);
+            } else {
+                handleBatchFiles(fileInput.files);
+            }
         }
     });
 
@@ -154,6 +272,37 @@ document.addEventListener("DOMContentLoaded", () => {
             document.body.removeChild(link);
         }
     });
+
+    // Batch Download ZIP Handler
+    batchDownloadZipBtn.addEventListener("click", async () => {
+        const validItems = batchFiles.filter(item => item.blob !== null);
+        if (validItems.length === 0) return;
+
+        batchDownloadZipBtn.disabled = true;
+        const originalText = batchDownloadZipBtn.innerHTML;
+        batchDownloadZipBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Compiling ZIP...`;
+
+        try {
+            const zip = new JSZip();
+            validItems.forEach(item => {
+                const filename = `${item.file.name.replace(".xlsx", "")}_validation_report.xlsx`;
+                zip.file(filename, item.blob);
+            });
+
+            const content = await zip.generateAsync({ type: "blob" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(content);
+            link.download = `netsuite_validation_batch_${Date.now()}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (e) {
+            alert("Failed to generate ZIP archive: " + e.message);
+        } finally {
+            batchDownloadZipBtn.disabled = false;
+            batchDownloadZipBtn.innerHTML = originalText;
+        }
+    });
 });
 
 function resetStatus() {
@@ -164,8 +313,15 @@ function resetStatus() {
     currentReportBlob = null;
 }
 
+function resetBatchStatus() {
+    document.getElementById("batch-card").classList.add("hidden");
+    document.getElementById("batch-results-panel").classList.add("hidden");
+    document.getElementById("batch-download-zip-btn").disabled = true;
+    batchFiles = [];
+}
+
 // ==========================================================================
-// CORE DATA LOADING & RUNNER ROUTINE
+// CORE DATA LOADING & RUNNER ROUTINE (SINGLE FILE)
 // ==========================================================================
 async function handleFile(file) {
     if (!file.name.endsWith(".xlsx")) {
@@ -195,53 +351,25 @@ async function handleFile(file) {
     document.getElementById("results-panel").classList.add("hidden");
 
     try {
-        // 1. Fetch Schema from Google Sheets
-        const schemaUrl = buildSheetUrl(spreadsheetConfig.id, "schema");
-        const schemaResponse = await fetch(schemaUrl);
-        if (!schemaResponse.ok) throw new Error("Failed to download schema configuration sheet.");
-        const schemaCsvText = await schemaResponse.text();
-        
-        const parsedSchema = Papa.parse(schemaCsvText, { header: true, skipEmptyLines: true });
-        const schemaRows = parsedSchema.data.filter(row => cleanValue(row.column_name) !== "");
+        // 1. Fetch Schema and lists (cached)
+        const { schemaRows, validationLists } = await getSchemaAndLists(templateType);
 
-        // 2. Fetch Validation Lists
-        statusTitle.textContent = "Loading validation lists...";
-        const validationLists = {};
-        const validationListNames = [...new Set(
-            schemaRows
-                .map(r => cleanValue(r.validation_list))
-                .filter(val => val !== "" && val !== "nan")
-                .map(val => normalizeColumnName(val))
-        )];
-
-        for (const listName of validationListNames) {
-            const listUrl = buildSheetUrl(spreadsheetConfig.id, listName);
-            const listResponse = await fetch(listUrl);
-            if (listResponse.ok) {
-                const listCsvText = await listResponse.text();
-                const parsedList = Papa.parse(listCsvText, { header: false, skipEmptyLines: true });
-                validationLists[listName] = parsedList.data
-                    .map(r => cleanValue(r[0]))
-                    .filter(val => val !== "");
-            }
-        }
-
-        // 3. Load Excel File using ExcelJS
+        // 2. Load Excel File using ExcelJS
         statusTitle.textContent = "Reading uploaded Excel spreadsheet...";
         const arrayBuffer = await file.arrayBuffer();
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(arrayBuffer);
         const worksheet = workbook.worksheets[0];
         
-        // 4. Validate and Execute
+        // 3. Validate and Execute
         statusTitle.textContent = "Validating dataset...";
         const validationResults = runValidation(worksheet, schemaRows, validationLists, templateType);
 
-        // 5. Generate and highlight Report Workbook
+        // 4. Generate and highlight Report Workbook
         statusTitle.textContent = "Generating validation report...";
         const reportBlob = await generateReportBlob(worksheet, schemaRows, validationResults, templateType);
         
-        // 6. Update UI with Results
+        // 5. Update UI with Results
         currentReportBlob = reportBlob;
         currentReportName = spreadsheetConfig.reportName;
 
@@ -287,6 +415,166 @@ async function handleFile(file) {
         statusCard.classList.add("error");
         statusTitle.textContent = "An error occurred during validation";
         statusFileName.textContent = err.message;
+    }
+}
+
+// ==========================================================================
+// CORE DATA LOADING & RUNNER ROUTINE (BATCH FILES)
+// ==========================================================================
+async function handleBatchFiles(filesList) {
+    const files = Array.from(filesList).filter(f => f.name.endsWith(".xlsx"));
+    if (files.length === 0) {
+        alert("No valid .xlsx files found in selection.");
+        return;
+    }
+
+    const batchCard = document.getElementById("batch-card");
+    const batchSpinner = document.getElementById("batch-spinner");
+    const batchStatusIcon = document.getElementById("batch-status-icon");
+    const batchStatusTitle = document.getElementById("batch-status-title");
+    const batchStatusDesc = document.getElementById("batch-status-desc");
+    const batchResultsPanel = document.getElementById("batch-results-panel");
+    const batchResultsBody = document.getElementById("batch-results-body");
+    const batchDownloadZipBtn = document.getElementById("batch-download-zip-btn");
+
+    batchCard.classList.remove("hidden");
+    batchSpinner.style.display = "block";
+    batchStatusIcon.style.display = "none";
+    batchStatusTitle.textContent = `Processing batch of ${files.length} files...`;
+    batchStatusDesc.textContent = "Loading configuration and parsing schemas...";
+    batchResultsPanel.classList.remove("hidden");
+    batchResultsBody.innerHTML = "";
+    batchDownloadZipBtn.disabled = true;
+
+    batchFiles = [];
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Add placeholder row to batch results table
+        const rowId = `batch-row-${i}`;
+        const tr = document.createElement("tr");
+        tr.id = rowId;
+        tr.innerHTML = `
+            <td><strong>${file.name}</strong></td>
+            <td><span class="text-muted">Detecting...</span></td>
+            <td>-</td>
+            <td><span class="badge-status processing">Processing</span></td>
+            <td>-</td>
+        `;
+        batchResultsBody.appendChild(tr);
+
+        batchFiles.push({
+            file: file,
+            rowId: rowId,
+            blob: null,
+            templateType: null,
+            status: "processing"
+        });
+    }
+
+    // Process files sequentially
+    for (let i = 0; i < batchFiles.length; i++) {
+        const item = batchFiles[i];
+        const file = item.file;
+        const rowElement = document.getElementById(item.rowId);
+
+        try {
+            // 1. Read Workbook using ExcelJS
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(arrayBuffer);
+            const worksheet = workbook.worksheets[0];
+
+            // 2. Gather Excel Headers
+            const excelHeaders = [];
+            const headerRow = worksheet.getRow(1);
+            for (let c = 1; c <= worksheet.columnCount; c++) {
+                excelHeaders.push(cleanValue(headerRow.getCell(c).value));
+            }
+            while (excelHeaders.length > 0 && excelHeaders[excelHeaders.length - 1] === "") {
+                excelHeaders.pop();
+            }
+
+            // 3. Guess template type
+            let guessedType = guessActualTemplate(excelHeaders);
+            let templateUsed = guessedType;
+            let detectionStatus = "Detected";
+
+            if (!templateUsed) {
+                // Fallback to selected sidebar dropdown template
+                templateUsed = document.getElementById("template-select").value;
+                detectionStatus = "Sidebar Select (Fallback)";
+            }
+
+            item.templateType = templateUsed;
+            const templateName = SPREADSHEETS[templateUsed].name;
+            rowElement.children[1].innerHTML = `${templateName} <small style="display:block;color:var(--text-dim);">${detectionStatus}</small>`;
+
+            // 4. Load Schema and validation lists (cached)
+            const { schemaRows, validationLists } = await getSchemaAndLists(templateUsed);
+
+            // 5. Run Validation
+            const validationResults = runValidation(worksheet, schemaRows, validationLists, templateUsed);
+            
+            // 6. Generate Report Blob
+            const reportBlob = await generateReportBlob(worksheet, schemaRows, validationResults, templateUsed);
+            item.blob = reportBlob;
+
+            // 7. Update Row Results
+            let statusText = "Clean";
+            let badgeClass = "success";
+            
+            if (validationResults.coreIssues.length > 0) {
+                statusText = "Core Mismatch";
+                badgeClass = "mismatch";
+            } else if (validationResults.rowsWithIssuesCount > 0) {
+                statusText = "Row Warnings";
+                badgeClass = "warning";
+            }
+
+            item.status = badgeClass;
+            rowElement.children[2].textContent = validationResults.rowsChecked;
+            rowElement.children[3].innerHTML = `<span class="badge-status ${badgeClass}">${statusText}</span>`;
+            
+            // Add download link for this specific file
+            const downloadLink = document.createElement("button");
+            downloadLink.className = "btn-row-action";
+            downloadLink.innerHTML = `<i class="fa-solid fa-file-arrow-down"></i> Download`;
+            downloadLink.addEventListener("click", () => {
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(reportBlob);
+                link.download = `${file.name.replace(".xlsx", "")}_validation_report.xlsx`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+            
+            rowElement.children[4].innerHTML = "";
+            rowElement.children[4].appendChild(downloadLink);
+
+        } catch (err) {
+            console.error(`Error processing file ${file.name}:`, err);
+            item.status = "error";
+            rowElement.children[1].innerHTML = `<span class="text-muted">-</span>`;
+            rowElement.children[2].textContent = "-";
+            rowElement.children[3].innerHTML = `<span class="badge-status error">Error</span>`;
+            rowElement.children[4].innerHTML = `<span style="font-size:12px;color:var(--error);">${err.message}</span>`;
+        }
+    }
+
+    // Complete Batch Progress
+    batchSpinner.style.display = "none";
+    batchStatusIcon.style.display = "block";
+    batchStatusIcon.className = "fa-solid fa-circle-check status-large-icon";
+    batchStatusIcon.style.color = "var(--success)";
+    batchStatusTitle.textContent = "Batch validation complete!";
+    
+    const validBlobs = batchFiles.filter(item => item.blob !== null);
+    batchStatusDesc.textContent = `Successfully processed ${validBlobs.length} of ${files.length} files.`;
+
+    if (validBlobs.length > 0) {
+        batchDownloadZipBtn.disabled = false;
     }
 }
 
