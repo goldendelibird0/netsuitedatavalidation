@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetSuite Data Validator</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="welcome-container">
+        <div class="welcome-card">
+            <div class="welcome-header">
+                <i class="fa-solid fa-shield-halved welcome-logo"></i>
+                <h1>NetSuite Data Validator</h1>
+                <p class="welcome-tagline">Ensure your spreadsheets are import-ready in seconds</p>
+            </div>
+            
+            <div class="formatting-guide">
+                <h2>Formatting Requirements</h2>
+                <div class="guide-grid">
+                    <div class="guide-item">
+                        <i class="fa-solid fa-file-excel guide-icon"></i>
+                        <h3>1. File Type</h3>
+                        <p>Only Excel spreadsheets (<code>.xlsx</code>) are supported.</p>
+                    </div>
+                    <div class="guide-item">
+                        <i class="fa-solid fa-table-columns guide-icon"></i>
+                        <h3>2. Header Row</h3>
+                        <p>The first row must contain column headers. Columns can be in any order.</p>
+                    </div>
+                    <div class="guide-item">
+                        <i class="fa-solid fa-asterisk guide-icon"></i>
+                        <h3>3. Required Columns</h3>
+                        <p>Mandatory fields (e.g. External ID, Subsidiary) must not be empty or blank.</p>
+                    </div>
+                    <div class="guide-item">
+                        <i class="fa-solid fa-list-check guide-icon"></i>
+                        <h3>4. Valid Lists & Types</h3>
+                        <p>Dropdown list values (like Locations or Departments) must match approved NetSuite options.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="start-app-btn" class="btn btn-primary start-btn">
+                Proceed to Validator <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div class="app-container hidden" id="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-solid fa-shield-halved brand-icon"></i>
+                <h2>NS Validator</h2>
+            </div>
+            
+            <div class="template-selector-section">
+                <label for="template-select"><i class="fa-solid fa-layer-group"></i> NetSuite Template</label>
+                <div class="select-wrapper">
+                    <select id="template-select">
+                        <option value="coa" selected>Chart of Accounts (COA)</option>
+                        <option value="employee">Employees</option>
+                        <option value="inventory">Inventory Items</option>
+                        <option value="customer">Customers</option>
+                        <option value="vendor">Vendors</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down select-arrow"></i>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h3><i class="fa-solid fa-shield-halved"></i> 100% Secure & Private</h3>
+                <p>Data processing is completed entirely in your browser. Your spreadsheets are never uploaded to any server.</p>
+            </div>
+            
+            <div class="schema-info">
+                <h4><i class="fa-solid fa-link"></i> Schema Config</h4>
+                <a id="schema-link" href="#" target="_blank">View Config Sheet <i class="fa-solid fa-up-right-from-square"></i></a>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="main-header">
+                <h1>NetSuite Data Validation</h1>
+                <p>Ensure your data is perfect before import</p>
+            </header>
+
+            <section class="workspace">
+                <!-- Dropzone Section -->
+                <div class="dropzone-container">
+                    <div id="dropzone" class="dropzone">
+                        <input type="file" id="file-input" accept=".xlsx" style="display: none;">
+                        <i class="fa-regular fa-file-excel dropzone-icon"></i>
+                        <h3>Drag & drop your Excel file here</h3>
+                        <p>or click to browse from your computer</p>
+                        <span class="file-format-info">Supports .xlsx spreadsheets only</span>
+                    </div>
+                </div>
+
+                <!-- Processing & Results Status Card -->
+                <div id="status-card" class="status-card hidden">
+                    <div class="status-header">
+                        <div id="status-spinner" class="spinner"></div>
+                        <i id="status-icon" class="fa-solid status-large-icon"></i>
+                        <div class="status-meta">
+                            <h3 id="status-title">Processing file...</h3>
+                            <p id="status-file-name">filename.xlsx</p>
+                        </div>
+                    </div>
+                    
+                    <div id="status-details" class="status-details hidden">
+                        <div class="stat-group">
+                            <span class="stat-label">Rows Checked</span>
+                            <span id="stat-rows-checked" class="stat-value">-</span>
+                        </div>
+                        <div class="stat-group">
+                            <span class="stat-label">Rows With Issues</span>
+                            <span id="stat-rows-issues" class="stat-value">-</span>
+                        </div>
+                        <div class="stat-group">
+                            <span class="stat-label">Core Issues</span>
+                            <span id="stat-core-issues" class="stat-value">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="status-actions">
+                        <button id="download-btn" class="btn btn-primary" disabled>
+                            <i class="fa-solid fa-file-arrow-down"></i> Download Highlighted Report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Detailed Validation Output -->
+                <div id="results-panel" class="results-panel hidden">
+                    <div class="panel-tabs">
+                        <button class="tab-btn active" data-tab="row-issues-tab">Row Issues</button>
+                        <button class="tab-btn" data-tab="core-issues-tab">Core Issues</button>
+                        <button class="tab-btn" data-tab="rules-ref-tab">Rule Reference</button>
+                    </div>
+
+                    <div class="tab-content-container">
+                        <!-- Row Issues Tab -->
+                        <div id="row-issues-tab" class="tab-content active">
+                            <div class="table-container">
+                                <table id="row-issues-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Row</th>
+                                            <th>Issue Count</th>
+                                            <th>Columns Affected</th>
+                                            <th>Validation Findings</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="row-issues-body">
+                                        <!-- Javascript will inject entries here -->
+                                    </tbody>
+                                </table>
+                                <div id="no-row-issues" class="no-issues-msg">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    <p>No row-level issues found! File is clean.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Core Issues Tab -->
+                        <div id="core-issues-tab" class="tab-content">
+                            <div class="table-container">
+                                <table id="core-issues-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Core Issue</th>
+                                            <th>Suggested Fix</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="core-issues-body">
+                                        <!-- Javascript will inject entries here -->
+                                    </tbody>
+                                </table>
+                                <div id="no-core-issues" class="no-issues-msg">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    <p>No core-level issues found!</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rule Reference Tab -->
+                        <div id="rules-ref-tab" class="tab-content">
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Rule</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rules-ref-body">
+                                        <!-- Javascript will inject entries here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ExcelJS & PapaParse Library CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Custom Application Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
